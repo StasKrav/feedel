@@ -26,10 +26,12 @@ const SOURCES = [
     { id: 'habr', name: 'Хабр', url: 'https://habr.com/ru/rss/all/all/?fl=ru', color: '#65C3DF' },
     { id: 'interfax', name: 'Интерфакс', url: 'https://www.interfax.ru/rss.asp', color: '#1A73E8' },
     { id: 'kommersant', name: 'Коммерсантъ', url: 'https://www.kommersant.ru/RSS/main.xml', color: '#E53935' },
-    { id: 'rbc', name: 'РБК', url: 'http://static.feed.rbc.ru/rbc/logical/footer/news.rss', color: '#4CAF50' },
+    { id: 'rbc', name: 'РБК', url: 'https://rssexport.rbc.ru/rbcnews/news/30/full.rss', color: '#4CAF50' },
     { id: 'lenta', name: 'Lenta.ru', url: 'https://lenta.ru/rss', color: '#9C27B0' },
     { id: 'rt', name: 'RT на русском', url: 'https://russian.rt.com/rss', color: '#FF5722' },
-    { id: 'vedomosti', name: 'Ведомости', url: 'https://www.vedomosti.ru/rss/news', color: '#607D8B' }
+    { id: 'vedomosti', name: 'Ведомости', url: 'https://www.vedomosti.ru/rss/news', color: '#607D8B' },
+    { id: 'tass', name: 'ТАСС', url: 'https://tass.ru/rss/v2.xml', color: '#2E7D32' },
+    { id: 'ria', name: 'РИА Новости', url: 'https://ria.ru/export/rss2/index.xml', color: '#FF9800' }
 ];
 
 // Парсинг одного источника
