@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NewsFlow — Агрегатор новостей</title>
+    
+    <!-- Material Icons & Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0,1" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Serif:opsz@8..144&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Material Design 3 Theme — Dark Surface */
+        :root {
+            --md-sys-color-primary: #D0BCFF;
+            --md-sys-color-on-primary: #381E72;
+            --md-sys-color-primary-container: #4F378B;
+            --md-sys-color-on-primary-container: #EADDFF;
+            --md-sys-color-surface: #1C1B1F;
+            --md-sys-color-surface-variant: #49454F;
+            --md-sys-color-on-surface: #E6E1E5;
+            --md-sys-color-on-surface-variant: #CAC4D0;
+            --md-sys-color-outline: #938F99;
+            --md-sys-color-background: #1C1B1F;
+            --md-sys-color-error: #F2B8B5;
+            
+            --md-elevation-1: 0px 1px 2px 0px rgba(0,0,0,0.3), 0px 1px 3px 1px rgba(0,0,0,0.15);
+            --md-elevation-2: 0px 1px 2px 0px rgba(0,0,0,0.3), 0px 2px 6px 2px rgba(0,0,0,0.15);
+            --md-elevation-3: 0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px 0px rgba(0,0,0,0.3);
+            
+            --transition-standard: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+            
+            --col-left-width: 280px;
+            --col-middle-width: 360px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--md-sys-color-background);
+            color: var(--md-sys-color-on-surface);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top App Bar */
+        .top-bar {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            background: var(--md-sys-color-surface);
+            border-bottom: 1px solid var(--md-sys-color-outline);
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .top-bar h1 {
+            font-family: 'Roboto Serif', serif;
+            font-weight: 400;
+            font-size: 1.5rem;
+            letter-spacing: 0;
+            color: var(--md-sys-color-on-surface);
+            flex: 1;
+        }
+
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 12px;
+            background: var(--md-sys-color-surface-variant);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: var(--md-sys-color-on-surface-variant);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4CAF50;
+            transition: var(--transition-standard);
+        }
+
+        .status-dot.offline {
+            background: #F44336;
+        }
+
+        .status-dot.loading {
+            background: #FFC107;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .search-wrapper {
+            display: flex;
+            align-items: center;
+            background: var(--md-sys-color-surface-variant);
+            border-radius: 28px;
+            padding: 4px 8px 4px 16px;
+            min-width: 360px;
+        }
+
+        .search-wrapper .material-symbols-outlined {
+            color: var(--md-sys-color-on-surface-variant);
+            font-size: 20px;
+        }
+
+        .search-wrapper input {
+            background: transparent;
+            border: none;
+            padding: 8px 12px;
+            color: var(--md-sys-color-on-surface);
+            font-size: 1rem;
+            outline: none;
+            width: 100%;
+        }
+
+        .search-wrapper input::placeholder {
+            color: var(--md-sys-color-on-surface-variant);
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: none;
+            color: var(--md-sys-color-on-surface-variant);
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition-standard);
+        }
+
+        .icon-btn:hover {
+            background: rgba(202, 196, 208, 0.08);
+        }
+
+        .width-controls {
+            display: flex;
+            gap: 4px;
+            margin-left: 8px;
+        }
+
+        .width-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 12px;
+            background: var(--md-sys-color-surface-variant);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: var(--md-sys-color-on-surface-variant);
+            cursor: pointer;
+            transition: var(--transition-standard);
+        }
+
+        .width-badge:hover {
+            background: var(--md-sys-color-primary-container);
+            color: var(--md-sys-color-on-primary-container);
+        }
+
+        /* Main Layout */
+        .app-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            gap: 0;
+            background: var(--md-sys-color-outline);
+        }
+
+        /* Left Column */
+        .sources-column {
+            width: var(--col-left-width);
+            min-width: 200px;
+            max-width: 400px;
+            background: var(--md-sys-color-surface);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: none;
+        }
+
+        .column-header {
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--md-sys-color-outline);
+            height: 56px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        .column-header h2 {
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--md-sys-color-on-surface-variant);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .column-header .icon-btn {
+            width: 32px;
+            height: 32px;
+            margin: -4px 0;
+        }
+
+        .sources-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0;
+        }
+
+        .source-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin: 0 8px;
+            border-radius: 28px;
+            cursor: pointer;
+            transition: var(--transition-standard);
+            color: var(--md-sys-color-on-surface-variant);
+            gap: 16px;
+        }
+
+        .source-item:hover {
+            background: rgba(208, 188, 255, 0.08);
+        }
+
+        .source-item.active {
+            background: var(--md-sys-color-primary-container);
+            color: var(--md-sys-color-on-primary-container);
+        }
+
+        .source-item .material-symbols-outlined {
+            font-size: 20px;
+        }
+
+        .source-info {
+            flex: 1;
+        }
+
+        .source-name {
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .source-count {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        /* Middle Column */
+        .articles-column {
+            width: var(--col-middle-width);
+            min-width: 280px;
+            max-width: 500px;
+            background: var(--md-sys-color-surface);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .articles-column .badge {
+            background: var(--md-sys-color-primary);
+            color: var(--md-sys-color-on-primary);
+            border-radius: 12px;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            line-height: 1;
+            height: 24px;
+            min-width: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .articles-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0;
+        }
+
+        .article-item {
+            padding: 16px;
+            border-bottom: 1px solid rgba(147, 143, 153, 0.2);
+            cursor: pointer;
+            transition: var(--transition-standard);
+        }
+
+        .article-item:hover {
+            background: rgba(208, 188, 255, 0.05);
+        }
+
+        .article-item.active {
+            background: rgba(208, 188, 255, 0.12);
+            border-left: 4px solid var(--md-sys-color-primary);
+        }
+
+        .article-source {
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .article-title {
+            font-weight: 500;
+            font-size: 1rem;
+            line-height: 1.4;
+            margin-bottom: 8px;
+            color: var(--md-sys-color-on-surface);
+        }
+
+        .article-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.75rem;
+            color: var(--md-sys-color-on-surface-variant);
+        }
+
+        .article-time {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .article-time .material-symbols-outlined {
+            font-size: 14px;
+        }
+
+        /* Right Column */
+        .content-column {
+            flex: 1;
+            background: var(--md-sys-color-surface);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .content-header {
+            padding: 20px 32px 12px;
+            border-bottom: 1px solid var(--md-sys-color-outline);
+        }
+
+        .content-source {
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .content-title {
+            font-family: 'Roboto Serif', serif;
+            font-size: 1.75rem;
+            font-weight: 400;
+            line-height: 1.3;
+            margin-bottom: 16px;
+        }
+
+        .content-meta-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--md-sys-color-on-surface-variant);
+            font-size: 0.875rem;
+        }
+
+        .content-meta {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .content-actions-inline {
+            display: flex;
+            gap: 8px;
+        }
+
+        .content-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 32px;
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--md-sys-color-on-surface);
+        }
+
+        .content-body a {
+            color: var(--md-sys-color-primary);
+            text-decoration: none;
+        }
+
+        .content-body a:hover {
+            text-decoration: underline;
+        }
+
+        .content-body img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 16px 0;
+        }
+
+        .content-body p {
+            margin-bottom: 1.2em;
+        }
+
+        .md-button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 24px;
+            border-radius: 20px;
+            font-weight: 500;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: var(--transition-standard);
+            border: none;
+            background: transparent;
+            color: var(--md-sys-color-primary);
+        }
+
+        .md-button.filled {
+            background: var(--md-sys-color-primary);
+            color: var(--md-sys-color-on-primary);
+        }
+
+        .md-button.filled:hover {
+            box-shadow: var(--md-elevation-1);
+            filter: brightness(1.05);
+        }
+
+        .md-button.outlined {
+            border: 1px solid var(--md-sys-color-outline);
+            color: var(--md-sys-color-on-surface);
+        }
+
+        .md-button:hover {
+            background: rgba(208, 188, 255, 0.08);
+        }
+
+        .md-button.compact {
+            padding: 6px 12px;
+            font-size: 0.8125rem;
+            gap: 4px;
+        }
+
+        .md-button.compact .material-symbols-outlined {
+            font-size: 18px;
+        }
+
+        /* Resize handles */
+        .resize-handle {
+            width: 1px;
+            background: var(--md-sys-color-outline);
+            cursor: col-resize;
+            position: relative;
+            z-index: 10;
+            transition: var(--transition-standard);
+            flex-shrink: 0;
+        }
+
+        .resize-handle:hover,
+        .resize-handle.active {
+            background: var(--md-sys-color-primary);
+            width: 2px;
+        }
+
+        .resize-handle::before {
+            content: '';
+            position: absolute;
+            left: -4px;
+            right: -4px;
+            top: 0;
+            bottom: 0;
+            background: transparent;
+        }
+
+        body.resizing {
+            cursor: col-resize !important;
+            user-select: none !important;
+        }
+
+        body.resizing * {
+            cursor: col-resize !important;
+            user-select: none !important;
+        }
+
+        /* States */
+        .loading-state, .empty-state, .error-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 48px;
+            color: var(--md-sys-color-on-surface-variant);
+            text-align: center;
+        }
+
+        .loading-state .material-symbols-outlined {
+            font-size: 48px;
+            margin-bottom: 16px;
+            animation: spin 1.5s linear infinite;
+        }
+
+        .error-state .material-symbols-outlined {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: var(--md-sys-color-error);
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--md-sys-color-surface-variant);
+            border-radius: 4px;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .sources-column { 
+                width: 80px !important;
+                min-width: 80px !important;
+                max-width: 80px !important;
+            }
+            .source-info, .source-count { display: none; }
+            .source-item { justify-content: center; padding: 16px; }
+            .articles-column { 
+                width: 320px !important;
+                min-width: 320px !important;
+            }
+            .resize-handle { display: none; }
+            .search-wrapper { min-width: 200px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top App Bar -->
+    <div class="top-bar">
+        <h1>NewsFlow</h1>
+        
+        <div class="server-status" id="serverStatus">
+            <span class="status-dot loading" id="statusDot"></span>
+            <span id="statusText">Подключение...</span>
+        </div>
+        
+        <div class="width-controls">
+            <div class="width-badge" id="resetWidthsBtn" title="Сбросить ширину колонок">
+                <span class="material-symbols-outlined">width</span>
+                <span>Сброс</span>
+            </div>
+            <div class="width-badge" id="saveWidthsBtn" title="Сохранить текущие ширины">
+                <span class="material-symbols-outlined">bookmark</span>
+            </div>
+        </div>
+        
+        <div class="search-wrapper">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" placeholder="Поиск по новостям..." id="searchInput">
+        </div>
+        
+        <button class="icon-btn" id="refreshBtn" title="Обновить ленту">
+            <span class="material-symbols-outlined">refresh</span>
+        </button>
+        
+        <button class="icon-btn" id="clearCacheBtn" title="Очистить кэш и перезагрузить">
+            <span class="material-symbols-outlined">cloud_off</span>
+        </button>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="app-container" id="appContainer">
+        <!-- Left Column -->
+        <div class="sources-column" id="leftColumn">
+            <div class="column-header">
+                <h2>Источники</h2>
+                <button class="icon-btn" id="addSourceBtn">
+                    <span class="material-symbols-outlined">add</span>
+                </button>
+            </div>
+            <div class="sources-list" id="sourcesList"></div>
+        </div>
+
+        <div class="resize-handle" id="resizeHandle1"></div>
+
+        <!-- Middle Column -->
+        <div class="articles-column" id="middleColumn">
+            <div class="column-header">
+                <h2>Лента</h2>
+                <span class="badge" id="articleCount">0</span>
+            </div>
+            <div class="articles-list" id="articlesList">
+                <div class="loading-state">
+                    <span class="material-symbols-outlined">sync</span>
+                    <p>Загрузка новостей...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="resize-handle" id="resizeHandle2"></div>
+
+        <!-- Right Column -->
+        <div class="content-column" id="rightColumn">
+            <div class="content-header">
+                <div class="content-source" id="detailSource">Выберите статью</div>
+                <h2 class="content-title" id="detailTitle">Начните чтение</h2>
+                
+                <div class="content-meta-row">
+                    <div class="content-meta" id="detailMeta"></div>
+                    <div class="content-actions-inline">
+                        <button class="md-button compact" id="readOriginalBtn">
+                            <span class="material-symbols-outlined">open_in_new</span>
+                            Читать оригинал
+                        </button>
+                        <button class="md-button outlined compact" id="bookmarkBtn">
+                            <span class="material-symbols-outlined">bookmark</span>
+                            В закладки
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="content-body" id="detailBody">
+                <div class="empty-state">
+                    <span class="material-symbols-outlined">newspaper</span>
+                    <p>Выберите новость из списка, чтобы прочитать её здесь</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // NewsFlow — Полноценный RSS-агрегатор
+        // ============================================
+
+        const API_URL = 'http://localhost:3001/api';
+        
+        // Состояние
+        let sources = [];
+        let allArticles = [];
+        let activeSource = 'all';
+        let activeArticleId = null;
+        let searchQuery = '';
+        let isLoading = false;
+        let isServerOnline = false;
+
+        // DOM элементы
+        const elements = {
+            sourcesList: document.getElementById('sourcesList'),
+            articlesList: document.getElementById('articlesList'),
+            articleCount: document.getElementById('articleCount'),
+            detailSource: document.getElementById('detailSource'),
+            detailTitle: document.getElementById('detailTitle'),
+            detailMeta: document.getElementById('detailMeta'),
+            detailBody: document.getElementById('detailBody'),
+            searchInput: document.getElementById('searchInput'),
+            refreshBtn: document.getElementById('refreshBtn'),
+            clearCacheBtn: document.getElementById('clearCacheBtn'),
+            addSourceBtn: document.getElementById('addSourceBtn'),
+            readOriginalBtn: document.getElementById('readOriginalBtn'),
+            bookmarkBtn: document.getElementById('bookmarkBtn'),
+            statusDot: document.getElementById('statusDot'),
+            statusText: document.getElementById('statusText')
+        };
+
+        // ============================================
+        // API клиент
+        // ============================================
+
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${API_URL}${endpoint}`, {
+                    signal: AbortSignal.timeout(15000),
+                    ...options
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                updateServerStatus(true);
+                return await response.json();
+                
+            } catch (error) {
+                updateServerStatus(false);
+                throw error;
+            }
+        }
+
+        function updateServerStatus(online) {
+            isServerOnline = online;
+            
+            if (online) {
+                elements.statusDot.className = 'status-dot';
+                elements.statusText.textContent = 'Онлайн';
+            } else {
+                elements.statusDot.className = 'status-dot offline';
+                elements.statusText.textContent = 'Офлайн';
+            }
+        }
+
+        // ============================================
+        // Загрузка данных
+        // ============================================
+
+        async function loadSources() {
+            try {
+                sources = await apiCall('/sources');
+                console.log(`📋 Загружено ${sources.length} источников`);
+            } catch (error) {
+                console.error('Ошибка загрузки источников:', error);
+                sources = [];
+            }
+        }
+
+        async function loadAllFeeds(forceRefresh = false) {
+            if (isLoading) return;
+            
+            isLoading = true;
+            showLoadingState(true);
+            elements.statusDot.className = 'status-dot loading';
+            elements.statusText.textContent = 'Загрузка...';
+            
+            try {
+                const url = `/news${forceRefresh ? '?refresh=true' : ''}`;
+                const data = await apiCall(url);
+                
+                allArticles = data.articles;
+                
+                console.log(`✅ Загружено ${allArticles.length} статей ${data.cached ? '(из кэша)' : '(свежие)'}`);
+                
+                applyFilters();
+                
+                if (allArticles.length > 0 && !activeArticleId) {
+                    selectArticle(allArticles[0].id);
+                }
+                
+                if (data.cached) {
+                    showToast('📦 Данные загружены из кэша', 2000);
+                } else {
+                    showToast('🔄 Новости обновлены', 2000);
+                }
+                
+            } catch (error) {
+                console.error('❌ Ошибка загрузки:', error);
+                showError('Не удалось подключиться к серверу. Убедитесь, что сервер запущен на порту 3001');
+            } finally {
+                isLoading = false;
+                showLoadingState(false);
+            }
+        }
+
+        async function clearCacheAndReload() {
+            try {
+                await fetch(`${API_URL}/clear-cache`, { method: 'POST' });
+                showToast('🗑️ Кэш очищен', 1500);
+                await loadAllFeeds(true);
+            } catch (error) {
+                console.error('Ошибка очистки кэша:', error);
+            }
+        }
+
+        // ============================================
+        // UI Helpers
+        // ============================================
+
+        function showLoadingState(show) {
+            if (show && allArticles.length === 0) {
+                elements.articlesList.innerHTML = `
+                    <div class="loading-state">
+                        <span class="material-symbols-outlined">sync</span>
+                        <p>Загрузка новостей...</p>
+                        <small style="margin-top: 8px;">Первая загрузка может занять до 30 секунд</small>
+                    </div>
+                `;
+            }
+        }
+
+        function showError(message) {
+            elements.articlesList.innerHTML = `
+                <div class="error-state">
+                    <span class="material-symbols-outlined">error</span>
+                    <p>${message}</p>
+                    <button class="md-button outlined" style="margin-top: 24px;" onclick="location.reload()">
+                        <span class="material-symbols-outlined">refresh</span>
+                        Попробовать снова
+                    </button>
+                </div>
+            `;
+        }
+
+        function showToast(message, duration = 2000) {
+            const toast = document.createElement('div');
+            toast.textContent = message;
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 24px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: var(--md-sys-color-inverse-surface, #2D2F31);
+                color: var(--md-sys-color-inverse-on-surface, #E3E2E6);
+                padding: 10px 24px;
+                border-radius: 20px;
+                font-size: 0.875rem;
+                z-index: 1000;
+                animation: fadeInOut ${duration}ms ease-in-out;
+                box-shadow: var(--md-elevation-2);
+            `;
+            
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes fadeInOut {
+                    0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+                    15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+                    85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+                    100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+                }
+            `;
+            document.head.appendChild(style);
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+                style.remove();
+            }, duration);
+        }
+
+        // ============================================
+        // Рендеринг
+        // ============================================
+
+        function renderSources() {
+            const container = elements.sourcesList;
+            container.innerHTML = '';
+            
+            // Все новости
+            const allItem = document.createElement('div');
+            allItem.className = `source-item ${activeSource === 'all' ? 'active' : ''}`;
+            allItem.dataset.sourceId = 'all';
+            allItem.innerHTML = `
+                <span class="material-symbols-outlined">inbox</span>
+                <div class="source-info">
+                    <div class="source-name">Все новости</div>
+                    <div class="source-count">${allArticles.length} статей</div>
+                </div>
+            `;
+            allItem.onclick = () => filterBySource('all');
+            container.appendChild(allItem);
+            
+            // Индивидуальные источники
+            sources.forEach(source => {
+                const articleCount = allArticles.filter(a => a.sourceId === source.id).length;
+                const item = document.createElement('div');
+                item.className = `source-item ${activeSource === source.id ? 'active' : ''}`;
+                item.dataset.sourceId = source.id;
+                item.innerHTML = `
+                    <span class="material-symbols-outlined">feed</span>
+                    <div class="source-info">
+                        <div class="source-name" style="color: ${source.color}">${source.name}</div>
+                        <div class="source-count">${articleCount} статей</div>
+                    </div>
+                `;
+                item.onclick = () => filterBySource(source.id);
+                container.appendChild(item);
+            });
+        }
+
+        function renderArticles(articles) {
+            if (articles.length === 0) {
+                elements.articlesList.innerHTML = `
+                    <div class="empty-state">
+                        <span class="material-symbols-outlined">search_off</span>
+                        <p>Новостей не найдено</p>
+                    </div>
+                `;
+                elements.articleCount.textContent = '0';
+                return;
+            }
+            
+            elements.articleCount.textContent = articles.length;
+            
+            elements.articlesList.innerHTML = articles.map(article => `
+                <div class="article-item ${activeArticleId === article.id ? 'active' : ''}" 
+                     data-article-id="${article.id}">
+                    <div class="article-source" style="color: ${article.sourceColor || 'var(--md-sys-color-primary)'}">
+                        ${article.sourceName}
+                    </div>
+                    <div class="article-title">${escapeHtml(article.title)}</div>
+                    <div class="article-meta">
+                        <span class="article-time">
+                            <span class="material-symbols-outlined">schedule</span>
+                            ${article.time}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+            
+            // 🔥 ВАЖНО: Добавляем обработчики клика после рендеринга
+            document.querySelectorAll('.article-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    // Не срабатываем при клике на ссылку внутри
+                    if (e.target.tagName === 'A') return;
+                    
+                    const articleId = item.dataset.articleId;
+                    selectArticle(articleId);
+                });
+            });
+        }
+
+        function selectArticle(articleId) {
+            console.log('🔍 Выбрана статья:', articleId);
+            
+            const article = allArticles.find(a => a.id === articleId);
+            
+            if (!article) {
+                console.warn('❌ Статья не найдена:', articleId);
+                return;
+            }
+            
+            // 🔥 Обновляем глобальную переменную
+            activeArticleId = article.id;
+            
+            // Рендерим детали
+            renderArticleDetail(article);
+        }
+
+        function renderArticleDetail(article) {
+    if (!article) {
+        elements.detailSource.textContent = 'Выберите статью';
+        elements.detailSource.style.color = 'var(--md-sys-color-primary)';
+        elements.detailTitle.textContent = 'Начните чтение';
+        elements.detailMeta.innerHTML = '';
+        elements.detailBody.innerHTML = `
+            <div class="empty-state">
+                <span class="material-symbols-outlined">newspaper</span>
+                <p>Выберите новость из списка, чтобы прочитать её здесь</p>
+            </div>
+        `;
+        activeArticleId = null;
+        return;
+    }
+    
+    // 🔥 Обновляем activeArticleId (на случай если вызвано напрямую)
+    activeArticleId = article.id;
+    
+    // Обновляем подсветку в списке
+    document.querySelectorAll('.article-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.articleId === article.id);
+    });
+    
+    elements.detailSource.textContent = article.sourceName;
+    elements.detailSource.style.color = article.sourceColor || 'var(--md-sys-color-primary)';
+    elements.detailTitle.textContent = article.title;
+    elements.detailMeta.innerHTML = `
+        <span class="article-time">
+            <span class="material-symbols-outlined">schedule</span>
+            ${article.time}
+        </span>
+    `;
+    
+    let content = article.content || article.summary || '';
+    if (!content.includes('<p>') && !content.includes('<div>')) {
+        content = `<p>${content}</p>`;
+    }
+    
+    content += `
+        <p style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline); color: var(--md-sys-color-on-surface-variant);">
+            <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">link</span>
+            <a href="${article.url}" target="_blank" style="color: var(--md-sys-color-primary);">
+                Читать оригинал на ${article.sourceName}
+            </a>
+        </p>
+    `;
+    
+    elements.detailBody.innerHTML = content;
+    
+    elements.readOriginalBtn.onclick = () => {
+        window.open(article.url, '_blank');
+    };
+}
+
+
+
+        // ============================================
+        // Фильтрация
+        // ============================================
+
+        function filterBySource(sourceId) {
+            activeSource = sourceId;
+            
+            document.querySelectorAll('.source-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.sourceId === sourceId);
+            });
+            
+            applyFilters();
+        }
+
+        function applyFilters() {
+            let filtered = [...allArticles];
+            
+            if (activeSource !== 'all') {
+                filtered = filtered.filter(a => a.sourceId === activeSource);
+            }
+            
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                filtered = filtered.filter(a => 
+                    a.title.toLowerCase().includes(query) || 
+                    a.sourceName.toLowerCase().includes(query)
+                );
+            }
+            
+            renderArticles(filtered);
+            renderSources();
+            
+            // 🔥 Проверяем, существует ли ещё активная статья в отфильтрованном списке
+            const activeArticleStillExists = activeArticleId && filtered.some(a => a.id === activeArticleId);
+            
+            if (!activeArticleStillExists) {
+                if (filtered.length > 0) {
+                    // Выбираем первую статью из списка
+                    selectArticle(filtered[0].id);
+                } else {
+                    renderArticleDetail(null);
+                }
+            } else {
+                // Обновляем отображение статьи (на случай если контент изменился)
+                const article = filtered.find(a => a.id === activeArticleId);
+                if (article) {
+                    renderArticleDetail(article);
+                }
+            }
+        }
+
+
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============================================
+        // Обработчики событий
+        // ============================================
+
+        function initEvents() {
+            elements.searchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value;
+                applyFilters();
+            });
+            
+            elements.refreshBtn.addEventListener('click', () => {
+                loadAllFeeds(true);
+            });
+            
+            elements.clearCacheBtn.addEventListener('click', clearCacheAndReload);
+            
+            elements.addSourceBtn.addEventListener('click', () => {
+                showToast('➕ Добавление источников в разработке', 2000);
+            });
+            
+            elements.bookmarkBtn.addEventListener('click', () => {
+                const title = elements.detailTitle.textContent;
+                if (title && title !== 'Начните чтение') {
+                    const bookmarks = JSON.parse(localStorage.getItem('newsflow_bookmarks') || '[]');
+                    const article = allArticles.find(a => a.id === activeArticleId);
+                    
+                    if (article && !bookmarks.some(b => b.id === article.id)) {
+                        bookmarks.push(article);
+                        localStorage.setItem('newsflow_bookmarks', JSON.stringify(bookmarks));
+                        showToast('✅ Статья добавлена в закладки', 2000);
+                    } else {
+                        showToast('📌 Статья уже в закладках', 2000);
+                    }
+                } else {
+                    showToast('⚠️ Сначала выберите статью', 2000);
+                }
+            });
+        }
+
+        // ============================================
+        // Column Resizer
+        // ============================================
+
+        class ColumnResizer {
+            constructor() {
+                this.leftCol = document.getElementById('leftColumn');
+                this.middleCol = document.getElementById('middleColumn');
+                this.handle1 = document.getElementById('resizeHandle1');
+                this.handle2 = document.getElementById('resizeHandle2');
+                
+                this.isResizing = false;
+                this.currentHandle = null;
+                this.startX = 0;
+                this.startLeftWidth = 0;
+                this.startMiddleWidth = 0;
+                
+                this.defaultLeftWidth = 280;
+                this.defaultMiddleWidth = 360;
+                
+                this.init();
+                this.loadSavedWidths();
+            }
+            
+            init() {
+                this.handle1.addEventListener('mousedown', (e) => this.startResize(e, 'left'));
+                this.handle2.addEventListener('mousedown', (e) => this.startResize(e, 'middle'));
+                
+                document.addEventListener('mousemove', (e) => this.onResize(e));
+                document.addEventListener('mouseup', () => this.stopResize());
+                
+                document.getElementById('resetWidthsBtn').addEventListener('click', () => this.resetWidths());
+                document.getElementById('saveWidthsBtn').addEventListener('click', () => this.saveWidths());
+            }
+            
+            startResize(e, handle) {
+                e.preventDefault();
+                
+                this.isResizing = true;
+                this.currentHandle = handle;
+                this.startX = e.clientX;
+                
+                const leftStyles = window.getComputedStyle(this.leftCol);
+                const middleStyles = window.getComputedStyle(this.middleCol);
+                
+                this.startLeftWidth = parseInt(leftStyles.width, 10);
+                this.startMiddleWidth = parseInt(middleStyles.width, 10);
+                
+                document.body.classList.add('resizing');
+            }
+            
+            onResize(e) {
+                if (!this.isResizing) return;
+                
+                e.preventDefault();
+                const deltaX = e.clientX - this.startX;
+                
+                if (this.currentHandle === 'left') {
+                    let newLeftWidth = this.startLeftWidth + deltaX;
+                    let newMiddleWidth = this.startMiddleWidth - deltaX;
+                    
+                    if (newLeftWidth >= 200 && newLeftWidth <= 400 &&
+                        newMiddleWidth >= 280 && newMiddleWidth <= 500) {
+                        
+                        document.documentElement.style.setProperty('--col-left-width', `${newLeftWidth}px`);
+                        document.documentElement.style.setProperty('--col-middle-width', `${newMiddleWidth}px`);
+                    }
+                } else if (this.currentHandle === 'middle') {
+                    let newMiddleWidth = this.startMiddleWidth + deltaX;
+                    
+                    if (newMiddleWidth >= 280 && newMiddleWidth <= 500) {
+                        document.documentElement.style.setProperty('--col-middle-width', `${newMiddleWidth}px`);
+                    }
+                }
+            }
+            
+            stopResize() {
+                this.isResizing = false;
+                document.body.classList.remove('resizing');
+            }
+            
+            resetWidths() {
+                document.documentElement.style.setProperty('--col-left-width', `${this.defaultLeftWidth}px`);
+                document.documentElement.style.setProperty('--col-middle-width', `${this.defaultMiddleWidth}px`);
+                showToast('↔️ Ширина колонок сброшена', 1500);
+            }
+            
+            saveWidths() {
+                const leftWidth = getComputedStyle(document.documentElement).getPropertyValue('--col-left-width').trim();
+                const middleWidth = getComputedStyle(document.documentElement).getPropertyValue('--col-middle-width').trim();
+                
+                localStorage.setItem('newsflow-left-width', leftWidth);
+                localStorage.setItem('newsflow-middle-width', middleWidth);
+                
+                showToast('💾 Ширина колонок сохранена', 1500);
+            }
+            
+            loadSavedWidths() {
+                const savedLeft = localStorage.getItem('newsflow-left-width');
+                const savedMiddle = localStorage.getItem('newsflow-middle-width');
+                
+                if (savedLeft) {
+                    document.documentElement.style.setProperty('--col-left-width', savedLeft);
+                }
+                if (savedMiddle) {
+                    document.documentElement.style.setProperty('--col-middle-width', savedMiddle);
+                }
+            }
+        }
+
+        // ============================================
+        // Инициализация
+        // ============================================
+
+        async function init() {
+            console.log('🚀 NewsFlow запущен');
+            
+            initEvents();
+            new ColumnResizer();
+            
+            // Проверяем сервер
+            try {
+                await loadSources();
+                await loadAllFeeds();
+            } catch (error) {
+                console.error('Ошибка инициализации:', error);
+            }
+            
+            // Автообновление каждые 15 минут
+            setInterval(() => {
+                if (isServerOnline) {
+                    console.log('🔄 Автообновление...');
+                    loadAllFeeds(true);
+                }
+            }, 15 * 60 * 1000);
+        }
+
+        init();
+    </script>
+</body>
+</html>
