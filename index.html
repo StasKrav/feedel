@@ -252,6 +252,55 @@
             font-size: 20px;
         }
 
+
+.source-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    margin: 0 8px;
+    border-radius: 28px;
+    cursor: pointer;
+    transition: var(--transition-standard);
+    color: var(--md-sys-color-on-surface-variant);
+    gap: 8px;
+    position: relative;
+}
+
+.source-item .source-info {
+    flex: 1;
+    cursor: pointer;
+}
+
+.delete-source-btn {
+    opacity: 0;
+    transition: var(--transition-standard);
+    width: 32px;
+    height: 32px;
+}
+
+.source-item:hover .delete-source-btn {
+    opacity: 1;
+}
+
+.delete-source-btn:hover {
+    background: rgba(242, 184, 181, 0.15) !important;
+    color: var(--md-sys-color-error) !important;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+
         .source-info {
             flex: 1;
         }
@@ -562,6 +611,98 @@
             .resize-handle { display: none; }
             .search-wrapper { min-width: 200px; }
         }
+
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+        
+        .modal-content {
+            position: relative;
+            background: var(--md-sys-color-surface);
+            border-radius: 28px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: var(--md-elevation-3);
+        }
+        
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--md-sys-color-outline);
+        }
+        
+        .modal-header h3 {
+            font-size: 1.25rem;
+            font-weight: 500;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--md-sys-color-on-surface-variant);
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--md-sys-color-surface-variant);
+            border: 1px solid var(--md-sys-color-outline);
+            border-radius: 12px;
+            color: var(--md-sys-color-on-surface);
+            font-size: 1rem;
+            outline: none;
+            transition: var(--transition-standard);
+        }
+        
+        .form-group input:focus {
+            border-color: var(--md-sys-color-primary);
+        }
+        
+        .form-group input[type="color"] {
+            padding: 4px;
+            height: 48px;
+            cursor: pointer;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 16px 24px;
+            border-top: 1px solid var(--md-sys-color-outline);
+        }
+        
     </style>
 </head>
 <body>
@@ -658,6 +799,38 @@
             </div>
         </div>
     </div>
+
+    <!-- Модальное окно добавления источника -->
+    <div class="modal" id="addSourceModal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Добавить источник</h3>
+                <button class="icon-btn" id="closeModalBtn">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Название</label>
+                    <input type="text" id="sourceName" placeholder="Например: Хабр" />
+                </div>
+                <div class="form-group">
+                    <label>RSS URL</label>
+                    <input type="url" id="sourceUrl" placeholder="https://example.com/rss" />
+                </div>
+                <div class="form-group">
+                    <label>Цвет (опционально)</label>
+                    <input type="color" id="sourceColor" value="#D0BCFF" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="md-button" id="cancelAddBtn">Отмена</button>
+                <button class="md-button filled" id="saveSourceBtn">Добавить</button>
+            </div>
+        </div>
+    </div>
+    
 
     <script>
         // ============================================
@@ -860,6 +1033,103 @@
         // Рендеринг
         // ============================================
 
+        // ============================================
+        // Управление источниками
+        // ============================================
+        
+        const modal = document.getElementById('addSourceModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const cancelAddBtn = document.getElementById('cancelAddBtn');
+        const saveSourceBtn = document.getElementById('saveSourceBtn');
+        const sourceName = document.getElementById('sourceName');
+        const sourceUrl = document.getElementById('sourceUrl');
+        const sourceColor = document.getElementById('sourceColor');
+        
+        function showModal() {
+            modal.style.display = 'flex';
+            sourceName.value = '';
+            sourceUrl.value = '';
+            sourceColor.value = '#D0BCFF';
+            sourceName.focus();
+        }
+        
+        function hideModal() {
+            modal.style.display = 'none';
+        }
+        
+        // Открытие модалки
+        elements.addSourceBtn.addEventListener('click', showModal);
+        
+        // Закрытие
+        closeModalBtn.addEventListener('click', hideModal);
+        cancelAddBtn.addEventListener('click', hideModal);
+        modal.querySelector('.modal-overlay').addEventListener('click', hideModal);
+        
+        // Сохранение источника
+        saveSourceBtn.addEventListener('click', async () => {
+            const name = sourceName.value.trim();
+            const url = sourceUrl.value.trim();
+            const color = sourceColor.value;
+            
+            if (!name || !url) {
+                showToast('⚠️ Заполните название и URL', 2000);
+                return;
+            }
+            
+            saveSourceBtn.disabled = true;
+            saveSourceBtn.innerHTML = '<span class="material-symbols-outlined">sync</span> Добавление...';
+            
+            try {
+                const response = await fetch(`${API_URL}/sources`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, url, color })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error);
+                }
+                
+                const newSource = await response.json();
+                sources.push(newSource);
+                
+                hideModal();
+                showToast(`✅ Источник "${name}" добавлен`, 2000);
+                
+                // Перезагружаем новости
+                await loadAllFeeds(true);
+                
+            } catch (error) {
+                showToast(`❌ ${error.message}`, 3000);
+            } finally {
+                saveSourceBtn.disabled = false;
+                saveSourceBtn.innerHTML = 'Добавить';
+            }
+        });
+        
+        // Функция удаления источника
+        async function deleteSource(sourceId) {
+            if (!confirm('Удалить этот источник?')) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/sources/${sourceId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) throw new Error('Ошибка удаления');
+                
+                sources = sources.filter(s => s.id !== sourceId);
+                showToast('🗑️ Источник удалён', 1500);
+                
+                await loadAllFeeds(true);
+                
+            } catch (error) {
+                showToast('❌ Не удалось удалить источник', 2000);
+            }
+        }
+        
+        // Обновлённый рендеринг источников (с кнопкой удаления)
         function renderSources() {
             const container = elements.sourcesList;
             container.innerHTML = '';
@@ -867,7 +1137,6 @@
             // Все новости
             const allItem = document.createElement('div');
             allItem.className = `source-item ${activeSource === 'all' ? 'active' : ''}`;
-            allItem.dataset.sourceId = 'all';
             allItem.innerHTML = `
                 <span class="material-symbols-outlined">inbox</span>
                 <div class="source-info">
@@ -875,23 +1144,43 @@
                     <div class="source-count">${allArticles.length} статей</div>
                 </div>
             `;
-            allItem.onclick = () => filterBySource('all');
+            allItem.onclick = () => {
+                activeSource = 'all';
+                renderSources();
+                renderArticles(allArticles);
+                if (allArticles.length > 0) selectArticle(allArticles[0].id);
+            };
             container.appendChild(allItem);
             
-            // Индивидуальные источники
+            // Источники
             sources.forEach(source => {
                 const articleCount = allArticles.filter(a => a.sourceId === source.id).length;
                 const item = document.createElement('div');
                 item.className = `source-item ${activeSource === source.id ? 'active' : ''}`;
-                item.dataset.sourceId = source.id;
                 item.innerHTML = `
                     <span class="material-symbols-outlined">feed</span>
                     <div class="source-info">
                         <div class="source-name" style="color: ${source.color}">${source.name}</div>
                         <div class="source-count">${articleCount} статей</div>
                     </div>
+                    <button class="icon-btn delete-source-btn" data-id="${source.id}" title="Удалить источник">
+                        <span class="material-symbols-outlined">delete</span>
+                    </button>
                 `;
-                item.onclick = () => filterBySource(source.id);
+                
+                item.querySelector('.source-info').onclick = () => {
+                    activeSource = source.id;
+                    renderSources();
+                    const filtered = allArticles.filter(a => a.sourceId === source.id);
+                    renderArticles(filtered);
+                    if (filtered.length > 0) selectArticle(filtered[0].id);
+                };
+                
+                item.querySelector('.delete-source-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    deleteSource(source.id);
+                };
+                
                 container.appendChild(item);
             });
         }
@@ -1087,10 +1376,7 @@
             });
             
             elements.clearCacheBtn.addEventListener('click', clearCacheAndReload);
-            
-            elements.addSourceBtn.addEventListener('click', () => {
-                showToast('➕ Добавление источников в разработке', 2000);
-            });
+
             
             elements.bookmarkBtn.addEventListener('click', () => {
                 const title = elements.detailTitle.textContent;
@@ -1250,5 +1536,6 @@
 
         init();
     </script>
+
 </body>
 </html>

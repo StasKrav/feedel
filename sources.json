@@ -1,0 +1,44 @@
+[
+  {
+    "id": "habr",
+    "name": "Хабр",
+    "url": "https://habr.com/ru/rss/all/all/?fl=ru",
+    "color": "#65C3DF"
+  },
+  {
+    "id": "interfax",
+    "name": "Интерфакс",
+    "url": "https://www.interfax.ru/rss.asp",
+    "color": "#1A73E8"
+  },
+  {
+    "id": "kommersant",
+    "name": "Коммерсантъ",
+    "url": "https://www.kommersant.ru/RSS/main.xml",
+    "color": "#E53935"
+  },
+  {
+    "id": "rbc",
+    "name": "РБК",
+    "url": "https://rssexport.rbc.ru/rbcnews/news/30/full.rss",
+    "color": "#4CAF50"
+  },
+  {
+    "id": "lenta",
+    "name": "Lenta.ru",
+    "url": "https://lenta.ru/rss",
+    "color": "#9C27B0"
+  },
+  {
+    "id": "новости-россии",
+    "name": "новости россии",
+    "url": "https://russian.rt.com/rss",
+    "color": "#d0bcff"
+  },
+  {
+    "id": "альджазира",
+    "name": "Альджазира",
+    "url": "https://www.aljazeera.com/xml/rss/all.xml",
+    "color": "#e94f1c"
+  }
+]
