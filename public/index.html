@@ -783,378 +783,401 @@
     
 
     <script>
-        // ============================================
-        // NewsFlow — Полноценный RSS-агрегатор
-        // ============================================
+// ============================================
+// Feedel — RSS-ридер с закладками
+// ============================================
 
-        // ============================================
-        // API клиент (чистая версия)
-        // ============================================
+const API_URL = '/api';
+
+
+let sources = [];
+let allArticles = [];
+let activeSource = 'all';
+let activeArticleId = null;
+let searchQuery = '';
+let isLoading = false;
+
+const elements = {
+    sourcesList: document.getElementById('sourcesList'),
+    articlesList: document.getElementById('articlesList'),
+    articleCount: document.getElementById('articleCount'),
+    detailSource: document.getElementById('detailSource'),
+    detailTitle: document.getElementById('detailTitle'),
+    detailMeta: document.getElementById('detailMeta'),
+    detailBody: document.getElementById('detailBody'),
+    searchInput: document.getElementById('searchInput'),
+    refreshBtn: document.getElementById('refreshBtn'),
+    clearCacheBtn: document.getElementById('clearCacheBtn'),
+    addSourceBtn: document.getElementById('addSourceBtn'),
+    readOriginalBtn: document.getElementById('readOriginalBtn'),
+    bookmarkBtn: document.getElementById('bookmarkBtn')
+};
+
+// ============================================
+// Работа с закладками
+// ============================================
+
+function getBookmarks() {
+    return JSON.parse(localStorage.getItem('feedel_bookmarks') || '[]');
+}
+
+function saveBookmarks(bookmarks) {
+    localStorage.setItem('feedel_bookmarks', JSON.stringify(bookmarks));
+}
+
+function isBookmarked(articleId) {
+    return getBookmarks().some(b => b.id === articleId);
+}
+
+function toggleBookmark(article) {
+    const bookmarks = getBookmarks();
+    const index = bookmarks.findIndex(b => b.id === article.id);
+    
+    if (index === -1) {
+        bookmarks.push(article);
+        saveBookmarks(bookmarks);
+        showToast('✅ Добавлено в закладки', 1500);
+        return true;
+    } else {
+        bookmarks.splice(index, 1);
+        saveBookmarks(bookmarks);
+        showToast('🗑️ Убрано из закладок', 1500);
+        return false;
+    }
+}
+
+// ============================================
+// API клиент
+// ============================================
+
+async function apiCall(endpoint, options = {}) {
+    try {
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            signal: AbortSignal.timeout(15000),
+            ...options
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+    } catch (error) {
+        console.error('API ошибка:', error);
+        throw error;
+    }
+}
+
+async function loadSources() {
+    try {
+        sources = await apiCall('/sources');
+        console.log(`📋 Загружено ${sources.length} источников`);
+    } catch (error) {
+        console.error('Ошибка загрузки источников:', error);
+        sources = [];
+    }
+}
+
+async function loadAllFeeds(forceRefresh = false) {
+    if (isLoading) return;
+    
+    isLoading = true;
+    showLoadingState(true);
+    
+    try {
+        const url = `/news${forceRefresh ? '?refresh=true' : ''}`;
+        const data = await apiCall(url);
         
-        const API_URL = '/api';
+        allArticles = data.articles;
+        console.log(`✅ Загружено ${allArticles.length} статей ${data.cached ? '(из кэша)' : '(свежие)'}`);
         
-        let sources = [];
-        let allArticles = [];
-        let activeSource = 'all';
-        let activeArticleId = null;
-        let searchQuery = '';
-        let isLoading = false;
+        applyFilters();
         
-        const elements = {
-            sourcesList: document.getElementById('sourcesList'),
-            articlesList: document.getElementById('articlesList'),
-            articleCount: document.getElementById('articleCount'),
-            detailSource: document.getElementById('detailSource'),
-            detailTitle: document.getElementById('detailTitle'),
-            detailMeta: document.getElementById('detailMeta'),
-            detailBody: document.getElementById('detailBody'),
-            searchInput: document.getElementById('searchInput'),
-            refreshBtn: document.getElementById('refreshBtn'),
-            clearCacheBtn: document.getElementById('clearCacheBtn'),
-            addSourceBtn: document.getElementById('addSourceBtn'),
-            readOriginalBtn: document.getElementById('readOriginalBtn'),
-            bookmarkBtn: document.getElementById('bookmarkBtn')
+        if (allArticles.length > 0 && !activeArticleId) {
+            selectArticle(allArticles[0].id);
+        }
+        
+    } catch (error) {
+        console.error('❌ Ошибка загрузки:', error);
+        showError('Не удалось подключиться к серверу');
+    } finally {
+        isLoading = false;
+        showLoadingState(false);
+    }
+}
+
+async function clearCacheAndReload() {
+    try {
+        await fetch(`${API_URL}/clear-cache`, { method: 'POST' });
+        showToast('🗑️ Кэш очищен', 1500);
+        await loadAllFeeds(true);
+    } catch (error) {
+        console.error('Ошибка очистки кэша:', error);
+    }
+}
+
+// ============================================
+// UI Helpers
+// ============================================
+
+function showLoadingState(show) {
+    if (show && allArticles.length === 0) {
+        elements.articlesList.innerHTML = `
+            <div class="loading-state">
+                <span class="material-symbols-outlined">sync</span>
+                <p>Загрузка новостей...</p>
+                <small style="margin-top: 8px;">Первая загрузка может занять до 30 секунд</small>
+            </div>
+        `;
+    }
+}
+
+function showError(message) {
+    elements.articlesList.innerHTML = `
+        <div class="error-state">
+            <span class="material-symbols-outlined">error</span>
+            <p>${message}</p>
+            <button class="md-button outlined" style="margin-top: 24px;" onclick="location.reload()">
+                <span class="material-symbols-outlined">refresh</span>
+                Попробовать снова
+            </button>
+        </div>
+    `;
+}
+
+function showToast(message, duration = 2000) {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #2D2F31;
+        color: #E3E2E6;
+        padding: 10px 24px;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        z-index: 1000;
+        animation: fadeInOut ${duration}ms ease-in-out;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
+    `;
+    
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+        }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+        style.remove();
+    }, duration);
+}
+
+// ============================================
+// Рендеринг источников (с закладками)
+// ============================================
+
+function renderSources() {
+    const container = elements.sourcesList;
+    container.innerHTML = '';
+    
+    // Все новости
+    const allItem = document.createElement('div');
+    allItem.className = `source-item ${activeSource === 'all' ? 'active' : ''}`;
+    allItem.innerHTML = `
+        <span class="material-symbols-outlined">inbox</span>
+        <div class="source-info">
+            <div class="source-name">Все новости</div>
+            <div class="source-count">${allArticles.length} статей</div>
+        </div>
+    `;
+    allItem.onclick = () => {
+        activeSource = 'all';
+        renderSources();
+        renderArticles(allArticles);
+        if (allArticles.length > 0) selectArticle(allArticles[0].id);
+    };
+    container.appendChild(allItem);
+    
+    // Закладки
+    const bookmarks = getBookmarks();
+    const bookmarksItem = document.createElement('div');
+    bookmarksItem.className = `source-item ${activeSource === 'bookmarks' ? 'active' : ''}`;
+    bookmarksItem.innerHTML = `
+        <span class="material-symbols-outlined">bookmark</span>
+        <div class="source-info">
+            <div class="source-name">Закладки</div>
+            <div class="source-count">${bookmarks.length} статей</div>
+        </div>
+    `;
+    bookmarksItem.onclick = () => {
+        activeSource = 'bookmarks';
+        renderSources();
+        renderArticles(bookmarks);
+        if (bookmarks.length > 0) {
+            selectArticle(bookmarks[0].id);
+        } else {
+            renderArticleDetail(null);
+        }
+    };
+    container.appendChild(bookmarksItem);
+    
+    // Разделитель
+    const separator = document.createElement('div');
+    separator.style.cssText = 'height: 1px; background: var(--md-sys-color-outline); margin: 8px 16px; opacity: 0.5;';
+    container.appendChild(separator);
+    
+    // Источники
+    sources.forEach(source => {
+        const articleCount = allArticles.filter(a => a.sourceId === source.id).length;
+        const item = document.createElement('div');
+        item.className = `source-item ${activeSource === source.id ? 'active' : ''}`;
+        item.innerHTML = `
+            <span class="material-symbols-outlined">feed</span>
+            <div class="source-info">
+                <div class="source-name" style="color: ${source.color}">${source.name}</div>
+                <div class="source-count">${articleCount} статей</div>
+            </div>
+            <button class="icon-btn delete-source-btn" data-id="${source.id}" title="Удалить источник">
+                <span class="material-symbols-outlined">delete</span>
+            </button>
+        `;
+        
+        item.querySelector('.source-info').onclick = () => {
+            activeSource = source.id;
+            renderSources();
+            const filtered = allArticles.filter(a => a.sourceId === source.id);
+            renderArticles(filtered);
+            if (filtered.length > 0) selectArticle(filtered[0].id);
         };
         
-        async function apiCall(endpoint, options = {}) {
-            const response = await fetch(`${API_URL}${endpoint}`, {
-                signal: AbortSignal.timeout(15000),
-                ...options
-            });
-            
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return await response.json();
-        }
+        item.querySelector('.delete-source-btn').onclick = (e) => {
+            e.stopPropagation();
+            deleteSource(source.id);
+        };
         
-        async function loadSources() {
-            try {
-                sources = await apiCall('/sources');
-                console.log(`📋 Загружено ${sources.length} источников`);
-            } catch (error) {
-                console.error('Ошибка загрузки источников:', error);
-                sources = [];
-            }
-        }
-        
-        async function loadAllFeeds(forceRefresh = false) {
-            if (isLoading) return;
-            
-            isLoading = true;
-            showLoadingState(true);
-            
-            try {
-                const url = `/news${forceRefresh ? '?refresh=true' : ''}`;
-                const data = await apiCall(url);
-                
-                allArticles = data.articles;
-                console.log(`✅ Загружено ${allArticles.length} статей ${data.cached ? '(из кэша)' : '(свежие)'}`);
-                
-                applyFilters();
-                
-                if (allArticles.length > 0 && !activeArticleId) {
-                    selectArticle(allArticles[0].id);
-                }
-                
-            } catch (error) {
-                console.error('❌ Ошибка загрузки:', error);
-                showError('Не удалось подключиться к серверу');
-            } finally {
-                isLoading = false;
-                showLoadingState(false);
-            }
-        }
+        container.appendChild(item);
+    });
+}
 
-        async function clearCacheAndReload() {
-            try {
-                await fetch(`${API_URL}/clear-cache`, { method: 'POST' });
-                showToast('🗑️ Кэш очищен', 1500);
-                await loadAllFeeds(true);
-            } catch (error) {
-                console.error('Ошибка очистки кэша:', error);
-            }
-        }
+// ============================================
+// Рендеринг статей (с кнопками удаления из закладок)
+// ============================================
 
-        // ============================================
-        // UI Helpers
-        // ============================================
-
-        function showLoadingState(show) {
-            if (show && allArticles.length === 0) {
-                elements.articlesList.innerHTML = `
-                    <div class="loading-state">
-                        <span class="material-symbols-outlined">sync</span>
-                        <p>Загрузка новостей...</p>
-                        <small style="margin-top: 8px;">Первая загрузка может занять до 30 секунд</small>
-                    </div>
-                `;
-            }
-        }
-
-        function showError(message) {
-            elements.articlesList.innerHTML = `
-                <div class="error-state">
-                    <span class="material-symbols-outlined">error</span>
-                    <p>${message}</p>
-                    <button class="md-button outlined" style="margin-top: 24px;" onclick="location.reload()">
-                        <span class="material-symbols-outlined">refresh</span>
-                        Попробовать снова
+function renderArticles(articles) {
+    if (articles.length === 0) {
+        elements.articlesList.innerHTML = `
+            <div class="empty-state">
+                <span class="material-symbols-outlined">${activeSource === 'bookmarks' ? 'bookmark_off' : 'search_off'}</span>
+                <p>${activeSource === 'bookmarks' ? 'Нет сохранённых закладок' : 'Новостей не найдено'}</p>
+            </div>
+        `;
+        elements.articleCount.textContent = '0';
+        return;
+    }
+    
+    elements.articleCount.textContent = articles.length;
+    
+    const isBookmarksView = activeSource === 'bookmarks';
+    
+    elements.articlesList.innerHTML = articles.map(article => `
+        <div class="article-item ${activeArticleId === article.id ? 'active' : ''}" 
+             data-article-id="${article.id}">
+            <div class="article-source" style="color: ${article.sourceColor || 'var(--md-sys-color-primary)'}">
+                ${article.sourceName}
+            </div>
+            <div class="article-title">${escapeHtml(article.title)}</div>
+            <div class="article-meta">
+                <span class="article-time">
+                    <span class="material-symbols-outlined">schedule</span>
+                    ${article.time}
+                </span>
+                ${isBookmarksView ? `
+                    <button class="icon-btn remove-bookmark-btn" data-id="${article.id}" 
+                            style="margin-left: auto; width: 28px; height: 28px; opacity: 0.7;"
+                            title="Убрать из закладок">
+                        <span class="material-symbols-outlined" style="font-size: 18px;">bookmark_remove</span>
                     </button>
-                </div>
-            `;
-        }
-
-        function showToast(message, duration = 2000) {
-            const toast = document.createElement('div');
-            toast.textContent = message;
-            toast.style.cssText = `
-                position: fixed;
-                bottom: 24px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: var(--md-sys-color-inverse-surface, #2D2F31);
-                color: var(--md-sys-color-inverse-on-surface, #E3E2E6);
-                padding: 10px 24px;
-                border-radius: 20px;
-                font-size: 0.875rem;
-                z-index: 1000;
-                animation: fadeInOut ${duration}ms ease-in-out;
-                box-shadow: var(--md-elevation-2);
-            `;
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+    
+    // Обработчики клика по статье
+    document.querySelectorAll('.article-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            if (e.target.closest('.remove-bookmark-btn')) return;
+            const articleId = item.dataset.articleId;
+            selectArticle(articleId);
+        });
+    });
+    
+    // Обработчики удаления из закладок
+    document.querySelectorAll('.remove-bookmark-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            const bookmarks = getBookmarks();
+            const newBookmarks = bookmarks.filter(b => b.id !== id);
+            saveBookmarks(newBookmarks);
             
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes fadeInOut {
-                    0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
-                    15% { opacity: 1; transform: translateX(-50%) translateY(0); }
-                    85% { opacity: 1; transform: translateX(-50%) translateY(0); }
-                    100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            showToast('🗑️ Убрано из закладок', 1500);
+            
+            if (activeSource === 'bookmarks') {
+                renderArticles(newBookmarks);
+                renderSources();
+                if (newBookmarks.length > 0) {
+                    selectArticle(newBookmarks[0].id);
+                } else {
+                    renderArticleDetail(null);
                 }
-            `;
-            document.head.appendChild(style);
-            document.body.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.remove();
-                style.remove();
-            }, duration);
-        }
-
-        // ============================================
-        // Рендеринг
-        // ============================================
-
-        // ============================================
-        // Управление источниками
-        // ============================================
-        
-        const modal = document.getElementById('addSourceModal');
-        const closeModalBtn = document.getElementById('closeModalBtn');
-        const cancelAddBtn = document.getElementById('cancelAddBtn');
-        const saveSourceBtn = document.getElementById('saveSourceBtn');
-        const sourceName = document.getElementById('sourceName');
-        const sourceUrl = document.getElementById('sourceUrl');
-        const sourceColor = document.getElementById('sourceColor');
-        
-        function showModal() {
-            modal.style.display = 'flex';
-            sourceName.value = '';
-            sourceUrl.value = '';
-            sourceColor.value = '#D0BCFF';
-            sourceName.focus();
-        }
-        
-        function hideModal() {
-            modal.style.display = 'none';
-        }
-        
-        // Открытие модалки
-        elements.addSourceBtn.addEventListener('click', showModal);
-        
-        // Закрытие
-        closeModalBtn.addEventListener('click', hideModal);
-        cancelAddBtn.addEventListener('click', hideModal);
-        modal.querySelector('.modal-overlay').addEventListener('click', hideModal);
-        
-        // Сохранение источника
-        saveSourceBtn.addEventListener('click', async () => {
-            const name = sourceName.value.trim();
-            const url = sourceUrl.value.trim();
-            const color = sourceColor.value;
-            
-            if (!name || !url) {
-                showToast('⚠️ Заполните название и URL', 2000);
-                return;
             }
             
-            saveSourceBtn.disabled = true;
-            saveSourceBtn.innerHTML = '<span class="material-symbols-outlined">sync</span> Добавление...';
-            
-            try {
-                const response = await fetch(`${API_URL}/sources`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, url, color })
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error);
-                }
-                
-                const newSource = await response.json();
-                sources.push(newSource);
-                
-                hideModal();
-                showToast(`✅ Источник "${name}" добавлен`, 2000);
-                
-                // Перезагружаем новости
-                await loadAllFeeds(true);
-                
-            } catch (error) {
-                showToast(`❌ ${error.message}`, 3000);
-            } finally {
-                saveSourceBtn.disabled = false;
-                saveSourceBtn.innerHTML = 'Добавить';
+            // Обновить кнопку в деталях, если открыта эта статья
+            if (activeArticleId === id) {
+                updateBookmarkButton();
             }
         });
-        
-        // Функция удаления источника
-        async function deleteSource(sourceId) {
-            if (!confirm('Удалить этот источник?')) return;
-            
-            try {
-                const response = await fetch(`${API_URL}/sources/${sourceId}`, {
-                    method: 'DELETE'
-                });
-                
-                if (!response.ok) throw new Error('Ошибка удаления');
-                
-                sources = sources.filter(s => s.id !== sourceId);
-                showToast('🗑️ Источник удалён', 1500);
-                
-                await loadAllFeeds(true);
-                
-            } catch (error) {
-                showToast('❌ Не удалось удалить источник', 2000);
-            }
-        }
-        
-        // Обновлённый рендеринг источников (с кнопкой удаления)
-        function renderSources() {
-            const container = elements.sourcesList;
-            container.innerHTML = '';
-            
-            // Все новости
-            const allItem = document.createElement('div');
-            allItem.className = `source-item ${activeSource === 'all' ? 'active' : ''}`;
-            allItem.innerHTML = `
-                <span class="material-symbols-outlined">inbox</span>
-                <div class="source-info">
-                    <div class="source-name">Все новости</div>
-                    <div class="source-count">${allArticles.length} статей</div>
-                </div>
-            `;
-            allItem.onclick = () => {
-                activeSource = 'all';
-                renderSources();
-                renderArticles(allArticles);
-                if (allArticles.length > 0) selectArticle(allArticles[0].id);
-            };
-            container.appendChild(allItem);
-            
-            // Источники
-            sources.forEach(source => {
-                const articleCount = allArticles.filter(a => a.sourceId === source.id).length;
-                const item = document.createElement('div');
-                item.className = `source-item ${activeSource === source.id ? 'active' : ''}`;
-                item.innerHTML = `
-                    <span class="material-symbols-outlined">feed</span>
-                    <div class="source-info">
-                        <div class="source-name" style="color: ${source.color}">${source.name}</div>
-                        <div class="source-count">${articleCount} статей</div>
-                    </div>
-                    <button class="icon-btn delete-source-btn" data-id="${source.id}" title="Удалить источник">
-                        <span class="material-symbols-outlined">delete</span>
-                    </button>
-                `;
-                
-                item.querySelector('.source-info').onclick = () => {
-                    activeSource = source.id;
-                    renderSources();
-                    const filtered = allArticles.filter(a => a.sourceId === source.id);
-                    renderArticles(filtered);
-                    if (filtered.length > 0) selectArticle(filtered[0].id);
-                };
-                
-                item.querySelector('.delete-source-btn').onclick = (e) => {
-                    e.stopPropagation();
-                    deleteSource(source.id);
-                };
-                
-                container.appendChild(item);
-            });
-        }
+    });
+}
 
-        function renderArticles(articles) {
-            if (articles.length === 0) {
-                elements.articlesList.innerHTML = `
-                    <div class="empty-state">
-                        <span class="material-symbols-outlined">search_off</span>
-                        <p>Новостей не найдено</p>
-                    </div>
-                `;
-                elements.articleCount.textContent = '0';
-                return;
-            }
-            
-            elements.articleCount.textContent = articles.length;
-            
-            elements.articlesList.innerHTML = articles.map(article => `
-                <div class="article-item ${activeArticleId === article.id ? 'active' : ''}" 
-                     data-article-id="${article.id}">
-                    <div class="article-source" style="color: ${article.sourceColor || 'var(--md-sys-color-primary)'}">
-                        ${article.sourceName}
-                    </div>
-                    <div class="article-title">${escapeHtml(article.title)}</div>
-                    <div class="article-meta">
-                        <span class="article-time">
-                            <span class="material-symbols-outlined">schedule</span>
-                            ${article.time}
-                        </span>
-                    </div>
-                </div>
-            `).join('');
-            
-            // 🔥 ВАЖНО: Добавляем обработчики клика после рендеринга
-            document.querySelectorAll('.article-item').forEach(item => {
-                item.addEventListener('click', (e) => {
-                    // Не срабатываем при клике на ссылку внутри
-                    if (e.target.tagName === 'A') return;
-                    
-                    const articleId = item.dataset.articleId;
-                    selectArticle(articleId);
-                });
-            });
-        }
+// ============================================
+// Детали статьи
+// ============================================
 
-        function selectArticle(articleId) {
-            console.log('🔍 Выбрана статья:', articleId);
-            
-            const article = allArticles.find(a => a.id === articleId);
-            
-            if (!article) {
-                console.warn('❌ Статья не найдена:', articleId);
-                return;
-            }
-            
-            // 🔥 Обновляем глобальную переменную
-            activeArticleId = article.id;
-            
-            // Рендерим детали
-            renderArticleDetail(article);
-        }
+function selectArticle(articleId) {
+    let article = allArticles.find(a => a.id === articleId);
+    
+    // Если не нашли в allArticles, ищем в закладках
+    if (!article && activeSource === 'bookmarks') {
+        article = getBookmarks().find(b => b.id === articleId);
+    }
+    
+    if (!article) {
+        console.warn('❌ Статья не найдена:', articleId);
+        return;
+    }
+    
+    activeArticleId = article.id;
+    renderArticleDetail(article);
+}
 
-        function renderArticleDetail(article) {
+function updateBookmarkButton() {
+    const article = allArticles.find(a => a.id === activeArticleId) || 
+                   getBookmarks().find(b => b.id === activeArticleId);
+    if (!article) return;
+    
+    const bookmarked = isBookmarked(article.id);
+    elements.bookmarkBtn.innerHTML = bookmarked ? 
+        '<span class="material-symbols-outlined">bookmark_remove</span> Убрать из закладок' :
+        '<span class="material-symbols-outlined">bookmark</span> В закладки';
+}
+
+function renderArticleDetail(article) {
     if (!article) {
         elements.detailSource.textContent = 'Выберите статью';
         elements.detailSource.style.color = 'var(--md-sys-color-primary)';
@@ -1172,6 +1195,7 @@
     
     activeArticleId = article.id;
     
+    // Подсветка в списке
     document.querySelectorAll('.article-item').forEach(el => {
         el.classList.toggle('active', el.dataset.articleId === article.id);
     });
@@ -1187,134 +1211,234 @@
     `;
     
     let content = article.content || article.summary || '';
-    
-    // 🔥 Очистка контента от проблемных символов
-    content = content
-        .replace(/\\/g, '\\\\')      // Экранируем обратные слеши
-        .replace(/`/g, '\\`')         // Экранируем обратные кавычки
-        .replace(/\$/g, '\\$')        // Экранируем знаки доллара
-        .replace(/<\/script>/gi, '<\\/script>'); // Предотвращаем закрытие скрипта
-    
     if (!content.includes('<p>') && !content.includes('<div>')) {
         content = `<p>${content}</p>`;
     }
     
-    // Используем textContent для безопасной вставки или innerHTML с осторожностью
-    try {
-        elements.detailBody.innerHTML = content;
-    } catch (e) {
-        console.warn('Ошибка вставки HTML, использую textContent');
-        elements.detailBody.textContent = article.summary || 'Не удалось отобразить контент';
-    }
+    elements.detailBody.innerHTML = content;
     
+    // Кнопка оригинала
     elements.readOriginalBtn.onclick = () => {
         window.open(article.url, '_blank');
     };
+    
+    // Кнопка закладок
+    updateBookmarkButton();
+    elements.bookmarkBtn.onclick = () => {
+        const added = toggleBookmark(article);
+        updateBookmarkButton();
+        renderSources(); // Обновить счётчик закладок
+        
+        // Если мы в режиме закладок и удалили текущую статью
+        if (activeSource === 'bookmarks' && !added) {
+            const bookmarks = getBookmarks();
+            renderArticles(bookmarks);
+            if (bookmarks.length > 0) {
+                selectArticle(bookmarks[0].id);
+            } else {
+                renderArticleDetail(null);
+            }
+        }
+    };
 }
 
+// ============================================
+// Фильтрация и поиск
+// ============================================
 
-
-        // ============================================
-        // Фильтрация
-        // ============================================
-
-        function filterBySource(sourceId) {
-            activeSource = sourceId;
-            
-            document.querySelectorAll('.source-item').forEach(el => {
-                el.classList.toggle('active', el.dataset.sourceId === sourceId);
-            });
-            
-            applyFilters();
+function applyFilters() {
+    let filtered = [];
+    
+    if (activeSource === 'bookmarks') {
+        filtered = getBookmarks();
+    } else if (activeSource === 'all') {
+        filtered = [...allArticles];
+    } else {
+        filtered = allArticles.filter(a => a.sourceId === activeSource);
+    }
+    
+    if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        filtered = filtered.filter(a => 
+            a.title.toLowerCase().includes(query) || 
+            a.sourceName.toLowerCase().includes(query)
+        );
+    }
+    
+    renderArticles(filtered);
+    renderSources();
+    
+    const activeStillExists = activeArticleId && filtered.some(a => a.id === activeArticleId);
+    
+    if (!activeStillExists) {
+        if (filtered.length > 0) {
+            selectArticle(filtered[0].id);
+        } else {
+            renderArticleDetail(null);
         }
+    }
+}
 
-        function applyFilters() {
-            let filtered = [...allArticles];
-            
-            if (activeSource !== 'all') {
-                filtered = filtered.filter(a => a.sourceId === activeSource);
-            }
-            
-            if (searchQuery) {
-                const query = searchQuery.toLowerCase();
-                filtered = filtered.filter(a => 
-                    a.title.toLowerCase().includes(query) || 
-                    a.sourceName.toLowerCase().includes(query)
-                );
-            }
-            
-            renderArticles(filtered);
-            renderSources();
-            
-            // 🔥 Проверяем, существует ли ещё активная статья в отфильтрованном списке
-            const activeArticleStillExists = activeArticleId && filtered.some(a => a.id === activeArticleId);
-            
-            if (!activeArticleStillExists) {
-                if (filtered.length > 0) {
-                    // Выбираем первую статью из списка
-                    selectArticle(filtered[0].id);
-                } else {
-                    renderArticleDetail(null);
-                }
-            } else {
-                // Обновляем отображение статьи (на случай если контент изменился)
-                const article = filtered.find(a => a.id === activeArticleId);
-                if (article) {
-                    renderArticleDetail(article);
-                }
-            }
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ============================================
+// Управление источниками (модальное окно)
+// ============================================
+
+const modal = document.getElementById('addSourceModal');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const cancelAddBtn = document.getElementById('cancelAddBtn');
+const saveSourceBtn = document.getElementById('saveSourceBtn');
+const sourceName = document.getElementById('sourceName');
+const sourceUrl = document.getElementById('sourceUrl');
+const sourceColor = document.getElementById('sourceColor');
+
+function showModal() {
+    modal.style.display = 'flex';
+    sourceName.value = '';
+    sourceUrl.value = '';
+    sourceColor.value = '#D0BCFF';
+    sourceName.focus();
+}
+
+function hideModal() {
+    modal.style.display = 'none';
+}
+
+elements.addSourceBtn.addEventListener('click', showModal);
+if (closeModalBtn) closeModalBtn.addEventListener('click', hideModal);
+if (cancelAddBtn) cancelAddBtn.addEventListener('click', hideModal);
+modal.querySelector('.modal-overlay')?.addEventListener('click', hideModal);
+
+saveSourceBtn.addEventListener('click', async () => {
+    const name = sourceName.value.trim();
+    const url = sourceUrl.value.trim();
+    const color = sourceColor.value;
+    
+    if (!name || !url) {
+        showToast('⚠️ Заполните название и URL', 2000);
+        return;
+    }
+    
+    saveSourceBtn.disabled = true;
+    saveSourceBtn.innerHTML = '<span class="material-symbols-outlined">sync</span> Добавление...';
+    
+    try {
+        const response = await fetch(`${API_URL}/sources`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, url, color })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error);
         }
+        
+        const newSource = await response.json();
+        sources.push(newSource);
+        
+        hideModal();
+        showToast(`✅ Источник "${name}" добавлен`, 2000);
+        await loadAllFeeds(true);
+        
+    } catch (error) {
+        showToast(`❌ ${error.message}`, 3000);
+    } finally {
+        saveSourceBtn.disabled = false;
+        saveSourceBtn.innerHTML = 'Добавить';
+    }
+});
 
+async function deleteSource(sourceId) {
+    if (!confirm('Удалить этот источник?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/sources/${sourceId}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Ошибка удаления');
+        
+        sources = sources.filter(s => s.id !== sourceId);
+        showToast('🗑️ Источник удалён', 1500);
+        await loadAllFeeds(true);
+        
+    } catch (error) {
+        showToast('❌ Не удалось удалить источник', 2000);
+    }
+}
 
+// ============================================
+// Инициализация и обработчики
+// ============================================
 
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+function initEvents() {
+    elements.searchInput.addEventListener('input', (e) => {
+        searchQuery = e.target.value;
+        applyFilters();
+    });
+    
+    elements.refreshBtn.addEventListener('click', () => {
+        loadAllFeeds(true);
+    });
+    
+    elements.clearCacheBtn.addEventListener('click', clearCacheAndReload);
+}
+
+// ============================================
+// Горячие клавиши
+// ============================================
+
+function initHotkeys() {
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        
+        const articles = document.querySelectorAll('.article-item');
+        const currentIndex = Array.from(articles).findIndex(el => 
+            el.classList.contains('active')
+        );
+        
+        // J / ↓ — следующая статья
+        if (e.key === 'j' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const next = articles[currentIndex + 1];
+            if (next) next.click();
         }
-
-        // ============================================
-        // Обработчики событий
-        // ============================================
-
-        function initEvents() {
-            elements.searchInput.addEventListener('input', (e) => {
-                searchQuery = e.target.value;
-                applyFilters();
-            });
-            
-            elements.refreshBtn.addEventListener('click', () => {
-                loadAllFeeds(true);
-            });
-            
-            elements.clearCacheBtn.addEventListener('click', clearCacheAndReload);
-
-            
-            elements.bookmarkBtn.addEventListener('click', () => {
-                const title = elements.detailTitle.textContent;
-                if (title && title !== 'Начните чтение') {
-                    const bookmarks = JSON.parse(localStorage.getItem('newsflow_bookmarks') || '[]');
-                    const article = allArticles.find(a => a.id === activeArticleId);
-                    
-                    if (article && !bookmarks.some(b => b.id === article.id)) {
-                        bookmarks.push(article);
-                        localStorage.setItem('newsflow_bookmarks', JSON.stringify(bookmarks));
-                        showToast('✅ Статья добавлена в закладки', 2000);
-                    } else {
-                        showToast('📌 Статья уже в закладках', 2000);
-                    }
-                } else {
-                    showToast('⚠️ Сначала выберите статью', 2000);
-                }
-            });
+        
+        // K / ↑ — предыдущая статья
+        if (e.key === 'k' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prev = articles[currentIndex - 1];
+            if (prev) prev.click();
         }
+        
+        // R — обновить
+        if (e.key === 'r') {
+            e.preventDefault();
+            loadAllFeeds(true);
+        }
+        
+        // / — поиск
+        if (e.key === '/') {
+            e.preventDefault();
+            elements.searchInput.focus();
+        }
+        
+        // Escape — снять фокус
+        if (e.key === 'Escape') {
+            elements.searchInput.blur();
+        }
+    });
+}
 
-        // ============================================
-        // Column Resizer
-        // ============================================
+// ============================================
+// Column Resizer (без изменений)
+// ============================================
 
-        class ColumnResizer {
+class ColumnResizer {
     constructor() {
         this.leftCol = document.getElementById('leftColumn');
         this.middleCol = document.getElementById('middleColumn');
@@ -1337,14 +1461,12 @@
     init() {
         this.handle1.addEventListener('mousedown', (e) => this.startResize(e, 'left'));
         this.handle2.addEventListener('mousedown', (e) => this.startResize(e, 'middle'));
-        
         document.addEventListener('mousemove', (e) => this.onResize(e));
         document.addEventListener('mouseup', () => this.stopResize());
     }
     
     startResize(e, handle) {
         e.preventDefault();
-        
         this.isResizing = true;
         this.currentHandle = handle;
         this.startX = e.clientX;
@@ -1360,7 +1482,6 @@
     
     onResize(e) {
         if (!this.isResizing) return;
-        
         e.preventDefault();
         const deltaX = e.clientX - this.startX;
         
@@ -1370,7 +1491,6 @@
             
             if (newLeftWidth >= 200 && newLeftWidth <= 400 &&
                 newMiddleWidth >= 260 && newMiddleWidth <= 480) {
-                
                 document.documentElement.style.setProperty('--col-left-width', `${newLeftWidth}px`);
                 document.documentElement.style.setProperty('--col-middle-width', `${newMiddleWidth}px`);
             }
@@ -1387,8 +1507,6 @@
         if (this.isResizing) {
             this.isResizing = false;
             document.body.classList.remove('resizing');
-            
-            // 🔥 АВТОСОХРАНЕНИЕ при отпускании
             this.saveWidths();
         }
     }
@@ -1396,51 +1514,46 @@
     saveWidths() {
         const leftWidth = getComputedStyle(document.documentElement).getPropertyValue('--col-left-width').trim();
         const middleWidth = getComputedStyle(document.documentElement).getPropertyValue('--col-middle-width').trim();
-        
-        localStorage.setItem('newsflow-left-width', leftWidth);
-        localStorage.setItem('newsflow-middle-width', middleWidth);
+        localStorage.setItem('feedel-left-width', leftWidth);
+        localStorage.setItem('feedel-middle-width', middleWidth);
     }
     
     loadSavedWidths() {
-        const savedLeft = localStorage.getItem('newsflow-left-width');
-        const savedMiddle = localStorage.getItem('newsflow-middle-width');
-        
-        if (savedLeft) {
-            document.documentElement.style.setProperty('--col-left-width', savedLeft);
-        }
-        if (savedMiddle) {
-            document.documentElement.style.setProperty('--col-middle-width', savedMiddle);
-        }
+        const savedLeft = localStorage.getItem('feedel-left-width');
+        const savedMiddle = localStorage.getItem('feedel-middle-width');
+        if (savedLeft) document.documentElement.style.setProperty('--col-left-width', savedLeft);
+        if (savedMiddle) document.documentElement.style.setProperty('--col-middle-width', savedMiddle);
     }
 }
-        // ============================================
-        // Инициализация
-        // ============================================
 
-        async function init() {
-            console.log('🚀 NewsFlow запущен');
-            
-            initEvents();
-            new ColumnResizer();
-            
-            // Проверяем сервер
-            try {
-                await loadSources();
-                await loadAllFeeds();
-            } catch (error) {
-                console.error('Ошибка инициализации:', error);
-            }
-            
-            // Автообновление каждые 15 минут
-            // Автообновление каждые 15 минут
-            setInterval(() => {
-                console.log('🔄 Автообновление...');
-                loadAllFeeds(true);
-            }, 15 * 60 * 1000);
-        }
+// ============================================
+// Запуск
+// ============================================
 
-        init();
-    </script>
+async function init() {
+    console.log('🚀 Feedel запущен');
+    
+    initEvents();
+    initHotkeys();
+    new ColumnResizer();
+    
+    try {
+        await loadSources();
+        await loadAllFeeds();
+    } catch (error) {
+        console.error('Ошибка инициализации:', error);
+    }
+    
+    setInterval(() => {
+        console.log('🔄 Автообновление...');
+        loadAllFeeds(true);
+    }, 15 * 60 * 1000);
+}
+
+init();
+
+</script>
+
 
 </body>
 </html>
