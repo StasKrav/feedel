@@ -257,8 +257,8 @@ app.post('/api/clear-cache', (req, res) => {
     res.json({ message: 'Кэш очищен' });
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-    console.log(`🚀 RSS сервер запущен: http://localhost:${PORT}`);
+    console.log(`🚀 RSS сервер запущен на порту ${PORT}`);
     console.log(`📡 Доступные источники: ${SOURCES.map(s => s.name).join(', ')}`);
 });

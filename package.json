@@ -1,23 +1,21 @@
 {
-  "name": "newsflow",
+  "name": "feedel",
   "version": "1.0.0",
-  "description": "",
+  "description": "Минималистичный RSS-ридер в стиле GNOME",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "@mozilla/readability": "^0.6.0",
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "jsdom": "^29.0.2",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "rss-parser": "^3.13.0",
     "node-cache": "^5.1.2",
-    "node-fetch": "^2.7.0",
-    "rss-parser": "^3.13.0"
+    "@mozilla/readability": "^0.4.4",
+    "jsdom": "^22.1.0",
+    "node-fetch": "^2.6.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
