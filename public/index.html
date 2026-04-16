@@ -1126,10 +1126,8 @@
         return;
     }
     
-    // 🔥 Обновляем activeArticleId (на случай если вызвано напрямую)
     activeArticleId = article.id;
     
-    // Обновляем подсветку в списке
     document.querySelectorAll('.article-item').forEach(el => {
         el.classList.toggle('active', el.dataset.articleId === article.id);
     });
@@ -1145,12 +1143,25 @@
     `;
     
     let content = article.content || article.summary || '';
+    
+    // 🔥 Очистка контента от проблемных символов
+    content = content
+        .replace(/\\/g, '\\\\')      // Экранируем обратные слеши
+        .replace(/`/g, '\\`')         // Экранируем обратные кавычки
+        .replace(/\$/g, '\\$')        // Экранируем знаки доллара
+        .replace(/<\/script>/gi, '<\\/script>'); // Предотвращаем закрытие скрипта
+    
     if (!content.includes('<p>') && !content.includes('<div>')) {
         content = `<p>${content}</p>`;
     }
     
-    
-    elements.detailBody.innerHTML = content;
+    // Используем textContent для безопасной вставки или innerHTML с осторожностью
+    try {
+        elements.detailBody.innerHTML = content;
+    } catch (e) {
+        console.warn('Ошибка вставки HTML, использую textContent');
+        elements.detailBody.textContent = article.summary || 'Не удалось отобразить контент';
+    }
     
     elements.readOriginalBtn.onclick = () => {
         window.open(article.url, '_blank');
