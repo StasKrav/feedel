@@ -371,19 +371,63 @@
     .content-body {
         flex: 1;
         overflow-y: auto;
+        overflow-x: hidden;
         padding: 32px 40px;
         font-size: 1rem;
         line-height: 1.6;
         color: var(--md-sys-color-on-surface);
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+    
+    .content-body * {
+        max-width: 100% !important;
+        box-sizing: border-box;
+    }
+    
+    .content-body img,
+    .content-body video,
+    .content-body iframe,
+    .content-body embed,
+    .content-body object {
+        max-width: 100% !important;
+        height: auto !important;
+        display: block;
+        margin: 16px 0;
+        border-radius: 8px;
+    }
+    
+    .content-body pre,
+    .content-body table {
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        display: block;
+    }
+    
+    .content-body pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        background: var(--md-sys-color-surface-variant);
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 0.9rem;
     }
     
     .content-body a {
+        word-break: break-all;
         color: var(--md-sys-color-primary);
         text-decoration: none;
     }
     
-    .content-body a:hover {
-        text-decoration: underline;
+    .content-body table {
+        border-collapse: collapse;
+        margin: 16px 0;
+    }
+    
+    .content-body td,
+    .content-body th {
+        padding: 8px 12px;
+        border: 1px solid var(--md-sys-color-outline);
     }
     
     /* Кнопки */
