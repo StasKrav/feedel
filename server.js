@@ -25,6 +25,11 @@ app.use(cors());
 app.use(express.json());
 
 // ============================================
+// Отдача статических файлов (фронтенд)
+// ============================================
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ============================================
 // Работа с источниками
 // ============================================
 
@@ -76,7 +81,6 @@ async function fetchFullArticle(url) {
         const article = reader.parse();
         
         if (article && article.content) {
-            // Очищаем контент
             return article.content
                 .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
                 .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
@@ -124,11 +128,9 @@ async function fetchSource(source) {
         console.log(`📡 Загрузка: ${source.name}`);
         const feed = await parser.parseURL(source.url);
         
-        // Обрабатываем первые 20 статей
         const items = await Promise.all(feed.items.slice(0, 20).map(async (item, index) => {
             let content = item.content || item['content:encoded'] || item.summary || '';
             
-            // Проверяем, нужно ли загружать полный текст
             const isShortContent = content.length < 800 || !content.includes('<p>');
             
             if (isShortContent && item.link) {
@@ -153,7 +155,7 @@ async function fetchSource(source) {
             };
         }));
         
-        return items.filter(item => item.content); // Только статьи с контентом
+        return items.filter(item => item.content);
         
     } catch (error) {
         console.error(`❌ ${source.name}: ${error.message}`);
@@ -176,7 +178,6 @@ app.post('/api/sources', async (req, res) => {
         return res.status(400).json({ error: 'Название и URL обязательны' });
     }
     
-    // Проверяем URL
     try {
         await parser.parseURL(url);
     } catch (error) {
@@ -257,8 +258,18 @@ app.post('/api/clear-cache', (req, res) => {
     res.json({ message: 'Кэш очищен' });
 });
 
+// ============================================
+// Главная страница (фронтенд)
+// ============================================
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ============================================
+// Запуск сервера
+// ============================================
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-    console.log(`🚀 RSS сервер запущен на порту ${PORT}`);
+    console.log(`🚀 Feedel запущен: http://localhost:${PORT}`);
     console.log(`📡 Доступные источники: ${SOURCES.map(s => s.name).join(', ')}`);
 });
