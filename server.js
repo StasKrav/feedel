@@ -4,64 +4,95 @@ const Parser = require('rss-parser');
 const NodeCache = require('node-cache');
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch');
+const { Readability } = require('@mozilla/readability');
+const { JSDOM } = require('jsdom');
 
 const app = express();
 const parser = new Parser({
     timeout: 15000,
     headers: {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
         'Accept': 'application/rss+xml, application/xml, text/xml, */*'
     },
     maxRedirects: 5
 });
 
-// Путь к файлу с источниками
 const SOURCES_FILE = path.join(__dirname, 'sources.json');
-
-// Кэш на 15 минут
 const cache = new NodeCache({ stdTTL: 900 });
 
 app.use(cors());
 app.use(express.json());
 
 // ============================================
-// Работа с источниками (чтение/запись в файл)
+// Работа с источниками
 // ============================================
 
 function loadSources() {
     try {
         if (fs.existsSync(SOURCES_FILE)) {
-            const data = fs.readFileSync(SOURCES_FILE, 'utf8');
-            return JSON.parse(data);
+            return JSON.parse(fs.readFileSync(SOURCES_FILE, 'utf8'));
         }
     } catch (error) {
         console.error('Ошибка чтения sources.json:', error);
     }
     
-    // Источники по умолчанию
     return [
         { id: 'habr', name: 'Хабр', url: 'https://habr.com/ru/rss/all/all/?fl=ru', color: '#65C3DF' },
         { id: 'interfax', name: 'Интерфакс', url: 'https://www.interfax.ru/rss.asp', color: '#1A73E8' },
-        { id: 'kommersant', name: 'Коммерсантъ', url: 'https://www.kommersant.ru/RSS/main.xml', color: '#E53935' },
         { id: 'rbc', name: 'РБК', url: 'https://rssexport.rbc.ru/rbcnews/news/30/full.rss', color: '#4CAF50' },
-        { id: 'lenta', name: 'Lenta.ru', url: 'https://lenta.ru/rss', color: '#9C27B0' }
+        { id: 'lenta', name: 'Lenta.ru', url: 'https://lenta.ru/rss', color: '#9C27B0' },
+        { id: 'tass', name: 'ТАСС', url: 'https://tass.ru/rss/v2.xml', color: '#2E7D32' },
+        { id: 'ria', name: 'РИА Новости', url: 'https://ria.ru/export/rss2/index.xml', color: '#FF9800' }
     ];
 }
 
 function saveSources(sources) {
-    try {
-        fs.writeFileSync(SOURCES_FILE, JSON.stringify(sources, null, 2));
-        return true;
-    } catch (error) {
-        console.error('Ошибка сохранения sources.json:', error);
-        return false;
-    }
+    fs.writeFileSync(SOURCES_FILE, JSON.stringify(sources, null, 2));
 }
 
 let SOURCES = loadSources();
 
 // ============================================
-// Парсинг RSS
+// Извлечение полного текста через Readability
+// ============================================
+
+async function fetchFullArticle(url) {
+    try {
+        console.log(`   📄 Загрузка полного текста: ${url.slice(0, 50)}...`);
+        
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+            },
+            timeout: 8000
+        });
+        
+        const html = await response.text();
+        const doc = new JSDOM(html, { url });
+        const reader = new Readability(doc.window.document);
+        const article = reader.parse();
+        
+        if (article && article.content) {
+            // Очищаем контент
+            return article.content
+                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+                .trim();
+        }
+        
+        return null;
+    } catch (error) {
+        console.warn(`   ⚠️ Не удалось извлечь полный текст: ${error.message}`);
+        return null;
+    }
+}
+
+// ============================================
+// Форматирование даты
 // ============================================
 
 function formatDate(dateString) {
@@ -84,23 +115,46 @@ function formatDate(dateString) {
     return date.toLocaleDateString('ru-RU');
 }
 
+// ============================================
+// Парсинг источника
+// ============================================
+
 async function fetchSource(source) {
     try {
         console.log(`📡 Загрузка: ${source.name}`);
         const feed = await parser.parseURL(source.url);
         
-        return feed.items.slice(0, 30).map((item, index) => ({
-            id: `${source.id}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-            sourceId: source.id,
-            sourceName: source.name,
-            sourceColor: source.color,
-            title: item.title || 'Без заголовка',
-            summary: (item.contentSnippet || item.summary || '').slice(0, 250) + '...',
-            content: item.content || item['content:encoded'] || item.summary || '',
-            url: item.link,
-            time: formatDate(item.pubDate || item.isoDate),
-            timestamp: new Date(item.pubDate || item.isoDate || Date.now()).getTime()
+        // Обрабатываем первые 20 статей
+        const items = await Promise.all(feed.items.slice(0, 20).map(async (item, index) => {
+            let content = item.content || item['content:encoded'] || item.summary || '';
+            
+            // Проверяем, нужно ли загружать полный текст
+            const isShortContent = content.length < 800 || !content.includes('<p>');
+            
+            if (isShortContent && item.link) {
+                const fullContent = await fetchFullArticle(item.link);
+                if (fullContent) {
+                    content = fullContent;
+                    console.log(`   ✅ Полный текст загружен: ${item.title?.slice(0, 40)}...`);
+                }
+            }
+            
+            return {
+                id: `${source.id}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+                sourceId: source.id,
+                sourceName: source.name,
+                sourceColor: source.color,
+                title: item.title || 'Без заголовка',
+                summary: (item.contentSnippet || item.summary || '').slice(0, 250) + '...',
+                content: content,
+                url: item.link,
+                time: formatDate(item.pubDate || item.isoDate),
+                timestamp: new Date(item.pubDate || item.isoDate || Date.now()).getTime()
+            };
         }));
+        
+        return items.filter(item => item.content); // Только статьи с контентом
+        
     } catch (error) {
         console.error(`❌ ${source.name}: ${error.message}`);
         return [];
@@ -111,12 +165,10 @@ async function fetchSource(source) {
 // API Эндпоинты
 // ============================================
 
-// Получить все источники
 app.get('/api/sources', (req, res) => {
     res.json(SOURCES);
 });
 
-// Добавить новый источник
 app.post('/api/sources', async (req, res) => {
     const { name, url, color } = req.body;
     
@@ -124,23 +176,20 @@ app.post('/api/sources', async (req, res) => {
         return res.status(400).json({ error: 'Название и URL обязательны' });
     }
     
-    // Проверяем, что URL рабочий
+    // Проверяем URL
     try {
-        console.log(`🔍 Проверка нового источника: ${name}`);
         await parser.parseURL(url);
     } catch (error) {
-        return res.status(400).json({ error: 'Не удалось загрузить RSS-ленту. Проверьте URL.' });
+        return res.status(400).json({ error: 'Не удалось загрузить RSS-ленту' });
     }
     
-    // Генерируем ID
     const id = name.toLowerCase()
         .replace(/[^a-zа-я0-9]/g, '-')
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '');
     
-    // Проверяем, нет ли уже такого ID
     if (SOURCES.find(s => s.id === id)) {
-        return res.status(400).json({ error: 'Источник с таким названием уже существует' });
+        return res.status(400).json({ error: 'Источник уже существует' });
     }
     
     const newSource = {
@@ -151,17 +200,12 @@ app.post('/api/sources', async (req, res) => {
     };
     
     SOURCES.push(newSource);
+    saveSources(SOURCES);
+    cache.del('all_news');
     
-    if (saveSources(SOURCES)) {
-        // Очищаем кэш, чтобы новые статьи загрузились
-        cache.del('all_news');
-        res.json(newSource);
-    } else {
-        res.status(500).json({ error: 'Не удалось сохранить источник' });
-    }
+    res.json(newSource);
 });
 
-// Удалить источник
 app.delete('/api/sources/:id', (req, res) => {
     const { id } = req.params;
     const index = SOURCES.findIndex(s => s.id === id);
@@ -171,16 +215,12 @@ app.delete('/api/sources/:id', (req, res) => {
     }
     
     SOURCES.splice(index, 1);
+    saveSources(SOURCES);
+    cache.del('all_news');
     
-    if (saveSources(SOURCES)) {
-        cache.del('all_news');
-        res.json({ success: true });
-    } else {
-        res.status(500).json({ error: 'Не удалось удалить источник' });
-    }
+    res.json({ success: true });
 });
 
-// Получить все новости
 app.get('/api/news', async (req, res) => {
     const forceRefresh = req.query.refresh === 'true';
     
@@ -212,7 +252,6 @@ app.get('/api/news', async (req, res) => {
     }
 });
 
-// Очистка кэша
 app.post('/api/clear-cache', (req, res) => {
     cache.flushAll();
     res.json({ message: 'Кэш очищен' });
