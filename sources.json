@@ -30,15 +30,9 @@
     "color": "#9C27B0"
   },
   {
-    "id": "новости-россии",
-    "name": "новости россии",
+    "id": "rt на русском",
+    "name": "RT на русском",
     "url": "https://russian.rt.com/rss",
     "color": "#d0bcff"
-  },
-  {
-    "id": "альджазира",
-    "name": "Альджазира",
-    "url": "https://www.aljazeera.com/xml/rss/all.xml",
-    "color": "#e94f1c"
   }
 ]
